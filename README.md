@@ -95,9 +95,60 @@ ros2 launch hikrobot_camera camera.launch.py params_file:=/absolute/path/to/came
 
 ---
 
-## 在这里解释你的项目
+# 第三次作业实现说明（周银夕）
 
-例如：
+## 实现功能
 
-1. 如何编译：
-2. 运行方式：
+- **设备选择与连接**：枚举 GigE + USB3 设备，支持按序列号选择（`serial_number` 留空连接枚举到的第一台）；启动时回读并打印分辨率、曝光范围、增益、实际帧率；
+- **图像采集与发布**：独立取流线程，以 `sensor_msgs/msg/Image` 发布到 `/image_raw`，默认 BEST_EFFORT QoS；
+- **参数查看与修改**：曝光/增益/帧率声明为带描述与取值范围的 ROS 参数，支持 `ros2 param get/describe` 查看，支持运行时 `ros2 param set` 立即下发到相机；
+- **断线重连与资源清理**：取流失败或掉线后自动释放句柄并按周期重连，重新插入自动恢复取流；退出时停线程、停取流、关设备、销毁句柄。
+
+实测硬件：Hikrobot MV-CA016-10UC（USB3，1440×1080 @ 30 fps）。
+
+## 依赖安装
+
+1. ROS 2 Humble 与 ros-dev-tools（参考 docs/ROS2Tutorial.md）
+2. 海康机器人 MVS SDK for Linux x86_64：从[海康机器人下载中心](https://www.hikrobotics.com/cn/machinevision/service/download/?module=0)下载，解压后 `sudo ./setup.sh` 安装到 `/opt/MVS`，再执行 `sudo ldconfig`
+3. ROS 依赖：`rosdep install --from-paths src --ignore-src -r -y --rosdistro humble`
+
+## 编译与运行
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select hikrobot_camera
+source install/setup.bash
+ros2 launch hikrobot_camera camera.launch.py
+# 或指定自己的参数文件
+ros2 launch hikrobot_camera camera.launch.py params_file:=/absolute/path/to/camera.yaml
+```
+
+## 可配置参数（config/camera.yaml）
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| serial_number | "" | 相机序列号，空 = 第一台（重启生效） |
+| image_topic | /image_raw | 图像话题（重启生效） |
+| frame_id | camera | 图像消息坐标系 |
+| pixel_format | Mono8 | 像素格式（重启生效） |
+| exposure_time | 10000.0 | 曝光时间（us），运行时可调 |
+| gain | 0.0 | 增益（dB），运行时可调 |
+| frame_rate | 30.0 | 采集帧率（fps），运行时可调 |
+| grab_timeout_ms | 1000 | 单次取流超时 |
+| reconnect_interval | 1.0 | 断线重连间隔（s） |
+| image_qos_reliable | false | 图像 QoS：true=RELIABLE（重启生效） |
+
+运行时调参示例（double 类型参数必须带小数点）：
+
+```bash
+ros2 param set /hikrobot_camera exposure_time 30000.0
+ros2 param get /hikrobot_camera gain
+ros2 param describe /hikrobot_camera frame_rate
+ros2 param dump /hikrobot_camera    # 调好后可导回 yaml 固化
+```
+
+## 已知问题
+
+- 暂不做 Bayer→RGB 转换，彩色相机以 Mono8 或 Bayer 原始格式发布（rviz2 均可直接显示）；
+- 图像为 BEST_EFFORT QoS：rviz2 的 Image 显示需将 Reliability Policy 设为 Best Effort（或将 `image_qos_reliable` 设为 true 后重启）；
+- `ros2 topic hz` 对 BEST_EFFORT 的大图像会低估帧率，实际流畅度以 rviz2 为准。

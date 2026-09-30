@@ -1,5 +1,21 @@
-# Only parameters currently supported by the scaffold are listed here.
-# TODO(student): Design and implement camera parameters before adding them.
-/hikrobot_camera:
+hikrobot_camera:
   ros__parameters:
     use_sim_time: false
+
+    # 设备选择：留空 = 枚举到的第一台相机；多相机时填序列号
+    serial_number: ""
+
+    # 图像发布
+    image_topic: "/image_raw"
+    frame_id: "camera"
+
+    # 采集参数（海康 USB 黑白相机一般用 Mono8；彩色相机用 BayerRG8 试试）
+    pixel_format: "Mono8"
+    exposure_time: 10000.0   # 曝光时间，单位 us
+    gain: 0.0                # 增益，单位 dB
+    frame_rate: 30.0         # 采集帧率，单位 fps
+
+    # 取流与重连
+    grab_timeout_ms: 1000
+    reconnect_interval: 1.0  # 秒
+    image_qos_reliable: false
